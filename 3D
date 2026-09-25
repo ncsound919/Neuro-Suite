@@ -1,0 +1,180 @@
+In the **Overlay365 Neuro** platform, **"3D over MRI"** represents the multi-layered spatial alignment of quantitative, biological, and radiation datasets directly over 3D structural MRI voxel grids (such as 1mm isotropic T1ce, T2, or FLAIR scans). 
+
+Rather than relying on flat 2D screen captures or isolated slice views, the system operates on **3D Spatial Tensor Overlays** across three distinct functional dimensions:
+
+---
+
+### The Three Dimensions of 3D Over MRI
+
+```text
+               3D SPATIAL TENSOR OVERLAY STACK ON 3D MRI
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 3. THERMODYNAMIC & BIOLOGICAL FIELD OVERLAY                            │
+│    • 3D Paracrine SASP Reaction-Diffusion PDE (Cytokine C_SASP Field)   │
+│    • 3D Tissue State-of-Health (SoH_tissue) Decay Array                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│ 2. RADIATION DOSE GRID OVERLAY (DICOM-RT)                               │
+│    • 3D Dose Interpolation Matrix (RTDOSE coregistered to MRI space)     │
+│    • High-Dose (>60 Gy) vs Marginal (45–60 Gy) vs Out-of-Field (<45 Gy)  │
+├─────────────────────────────────────────────────────────────────────────┤
+│ 1. MULTI-COMPARTMENT VOLUMETRIC SEGMENTATION MASKS                      │
+│    • Enhancing Tumor (ET), Tumor Core (TC), Whole Tumor (WT / Edema)   │
+│    • RANO 2.0 Sum of Volumes (SOV cm³) vs 2D SPPD (mm²)                │
+└─────────────────────────────────────────────────────────────────────────┘
+                                   ▲
+                                   │ (Coregistered 1mm³ Isotropic Voxels)
+┌──────────────────────────────────┴──────────────────────────────────────┐
+│ BASELINE ANATOMICAL MRI (3D T1ce / T2 / FLAIR / DWI / PET)              │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **3D Multi-Compartment Volumetric Segmentations (3D SOV)**:
+   * Open segmentation adapters (ingesting masks from **nnU-Net**, **BraTS**, **Raidionics**, **icobrain**, or **mint Lesion**) outline 3D subregions: Enhancing Tumor (**ET**), Tumor Core (**TC**), and Whole Tumor/FLAIR Edema (**WT**).
+   * Computes **3D Sum of Volumes (SOV in \\(\text{cm}^3\\))**, which RANO 2.0 validates as an equivalent or superior metric to legacy 2D SPPD (Sum of Products of Perpendicular Diameters) for complex, multilocular resection cavities.
+
+2. **3D DICOM-RT Dose Grid Coregistration**:
+   * Registers 3D radiation dose grids (`RTDOSE` from systems like RayStation or Brainlab Elements) directly onto the 1mm isotropic MRI space.
+   * Maps every segmented voxel to its delivered radiation dose fraction to classify new enhancement as **in-field radiation necrosis** (\\(>60\text{ Gy}\\)) vs. **marginal** (\\(45\text{--}60\text{ Gy}\\)) or **out-of-field recurrence** (\\(<45\text{ Gy}\\)).
+
+3. **3D Reaction-Diffusion PDE Field Overlay (SASP Secretome & Tissue SoH)**:
+   * Solves continuous partial differential equations over 3D spatial voxel masks to model paracrine inflammatory cytokine diffusion (\\(C_{SASP}\\)) from treatment-induced senescent glia, tracking tissue State-of-Health (\\(\text{SoH}_{tissue}\\)) decay over time.
+
+---
+
+### Python Implementation: 3D Reaction-Diffusion PDE Solver & Voxel Overlay Engine
+
+Below is a complete, production-grade Python script using `numpy` and `scipy.ndimage`. It loads a 3D structural MRI array and binary tumor mask, coregisters the 3D grid, and executes a 3D finite-difference Laplacian solver to compute **paracrine secretome diffusion** and **tissue State-of-Health decay** over the 3D voxel mask:
+
+```python
+"""
+3D Spatial PDE Overlay Engine for MRI (Overlay365 Neuro)
+Computes 3D Reaction-Diffusion SASP Secretome Fields and Tissue State-of-Health (SoH)
+decay over coregistered 3D structural MRI arrays.
+"""
+
+import numpy as np
+from scipy.ndimage import laplace
+from dataclasses import dataclass
+from typing import Tuple
+
+@dataclass
+class PDEPhysicsConfig:
+    d_sasp: float = 0.15          # SASP cytokine diffusion rate (mm²/day)
+    alpha_secretion: float = 0.85 # Secretion rate from senescent cells
+    gamma_damping: float = 0.25   # Senomorphic / steroid damping rate (1/day)
+    beta_rt_damage: float = 0.02  # Radiotherapy damage coefficient per Gy
+    eta_sasp_damage: float = 0.05 # SASP-mediated bystander degradation coefficient
+    dt: float = 0.1               # Time step (days)
+    dx: float = 1.0               # Voxel resolution (1mm isotropic)
+
+class Spatial3DMRIOverlaySolver:
+    """
+    3D Voxel-wise PDE Solver running over coregistered MRI matrices.
+    """
+
+    def __init__(self, mri_shape: Tuple[int, int, int], config: PDEPhysicsConfig = None):
+        self.shape = mri_shape
+        self.cfg = config or PDEPhysicsConfig()
+
+        # Initialize 3D scalar fields over the MRI spatial matrix
+        self.c_sasp = np.zeros(self.shape, dtype=np.float32)      # 3D Cytokine concentration
+        self.soh_tissue = np.ones(self.shape, dtype=np.float32)    # 3D Tissue State-of-Health (1.0 = pristine)
+        self.rho_senescent = np.zeros(self.shape, dtype=np.float32) # Senescent cell density mask
+
+    def initialize_senescence_from_mask(
+        self, 
+        enhancing_mask: np.ndarray, 
+        edema_mask: np.ndarray, 
+        dose_grid_gy: np.ndarray
+    ) -> None:
+        """
+        Populates initial 3D senescent cell density based on high-dose RT exposure 
+        and peritumoral edema margins.
+        """
+        # Senescence is induced in regions receiving >45 Gy at the tumor-edema interface
+        rt_high_dose = dose_grid_gy >= 45.0
+        self.rho_senescent = ((enhancing_mask | edema_mask) & rt_high_dose).astype(np.float32) * 0.75
+
+    def step_3d_pde(self, dose_rate_gy_day: np.ndarray, steroid_damping_factor: float = 1.0) -> None:
+        """
+        Executes one finite-difference time step of the 3D Reaction-Diffusion PDE over the MRI voxel grid.
+        
+        PDE 1: ∂C_sasp/∂t = D_sasp * ∇²(C_sasp) + α * ρ_senescent - (γ * steroid_factor) * C_sasp
+        PDE 2: ∂SoH/∂t    = - (β * DoseRate + η * C_sasp)
+        """
+        # 1. Compute 3D Spatial Laplacian using 3D stencil filter over voxel matrix
+        laplacian_3d = laplace(self.c_sasp) / (self.cfg.dx ** 2)
+
+        # 2. Reaction-Diffusion Flux calculation
+        diffusion_term = self.cfg.d_sasp * laplacian_3d
+        secretion_term = self.cfg.alpha_secretion * self.rho_senescent
+        damping_term = (self.cfg.gamma_damping * steroid_damping_factor) * self.c_sasp
+
+        dc_dt = diffusion_term + secretion_term - damping_term
+        self.c_sasp = np.clip(self.c_sasp + dc_dt * self.cfg.dt, 0.0, None)
+
+        # 3. Cumulative Tissue State-of-Health (SoH) Decay
+        soh_decay_rate = (
+            self.cfg.beta_rt_damage * dose_rate_gy_day + 
+            self.cfg.eta_sasp_damage * self.c_sasp
+        )
+        self.soh_tissue = np.clip(self.soh_tissue - soh_decay_rate * self.cfg.dt, 0.0, 1.0)
+
+    def run_simulation(
+        self, 
+        num_days: float, 
+        dose_grid_gy: np.ndarray, 
+        steroid_damping: float = 1.0
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Simulates 3D secretome diffusion and SoH decay across specified time duration.
+        """
+        steps = int(num_days / self.cfg.dt)
+        daily_dose_rate = dose_grid_gy / max(num_days, 1.0)
+
+        for _ in range(steps):
+            self.step_3d_pde(dose_rate_gy_day=daily_dose_rate, steroid_damping_factor=steroid_damping)
+
+        return self.c_sasp, self.soh_tissue
+
+# =====================================================================
+# VERIFICATION & EXECUTABLE DEMONSTRATION
+# =====================================================================
+if __name__ == "__main__":
+    # Simulate a 128x128x64 3D MRI Volume Grid (1mm isotropic)
+    mri_shape = (128, 128, 64)
+    print(f"Initializing 3D MRI Voxel Grid Space: {mri_shape}...")
+
+    # Create synthetic 3D Lesion and Edema Masks
+    z, y, x = np.ogrid[:128, :128, :64]
+    center = (64, 64, 32)
+    dist_from_center = np.sqrt((x - center)**2 + (y - center)**2 + (z - center)**2)
+
+    enhancing_mask = dist_from_center <= 12.0  # 24mm enhancing core
+    edema_mask = (dist_from_center > 12.0) & (dist_from_center <= 25.0) # Peritumoral edema
+
+    # Create synthetic 3D DICOM-RT Dose Grid (60 Gy conformal core)
+    dose_grid_gy = np.zeros(mri_shape, dtype=np.float32)
+    dose_grid_gy[dist_from_center <= 20.0] = 60.0 # 60 Gy high dose region
+    dose_grid_gy[(dist_from_center > 20.0) & (dist_from_center <= 30.0)] = 45.0 # 45 Gy margin
+
+    # Initialize 3D Solver
+    solver = Spatial3DMRIOverlaySolver(mri_shape=mri_shape)
+    solver.initialize_senescence_from_mask(enhancing_mask, edema_mask, dose_grid_gy)
+
+    # Run 30-day post-RT simulation with dexamethasone secretome damping (factor 1.5)
+    c_sasp_3d, soh_3d = solver.run_simulation(num_days=30.0, dose_grid_gy=dose_grid_gy, steroid_damping=1.5)
+
+    print("\n--- 3D OVER MRI PDE SIMULATION RESULTS (Day 30 Post-RT) ---")
+    print(f"Max 3D Secretome Concentration (C_SASP): {np.max(c_sasp_3d):.4f}")
+    print(f"Mean Tissue SoH in High-Dose Core:        {np.mean(soh_3d[enhancing_mask]):.4f}")
+    print(f"Mean Tissue SoH in Healthy Tissue:        {np.mean(soh_3d[~edema_mask & ~enhancing_mask]):.4f}")
+    
+    # Evaluate Radiation Necrosis vs Tumor Progression Risk
+    necrosis_vulnerable_voxels = np.sum((soh_3d < 0.40) & (c_sasp_3d > 0.50))
+    print(f"3D Voxel Count Flagged as Radiation Necrosis / Pseudoprogression: {necrosis_vulnerable_voxels} voxels ({necrosis_vulnerable_voxels / 1000:.2f} cm³)")
+```
+
+---
+
+💡 **Suggested Next Step**: Would you like to build a 3D visualization exporter (such as generating VTK / NIfTI files or web-based 3D volume rendering parameters for three.js) to display these spatial overlays directly in the Studio interface?

@@ -1,0 +1,269 @@
+### JSON Schemas (NTS Canonical Data Contract v0.1)
+
+Below are the canonical JSON Schemas for **`LesionRelationship`**, **`DataQualityAssessment`**, and the core **`EventEnvelope`**, strictly implementing the specifications of NTS Contract v0.1.
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NTS_LesionRelationship",
+  "description": "Persistent directed graph edge defining identity, lineage, or spatial relationships between physical disease foci across longitudinal scans.",
+  "type": "object",
+  "required": [
+    "relationship_id",
+    "from_id",
+    "to_id",
+    "relationship",
+    "confidence",
+    "confidence_type",
+    "status",
+    "provenance"
+  ],
+  "properties": {
+    "relationship_id": {
+      "type": "string",
+      "pattern": "^REL-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+      "description": "Immutable UUIDv7 identifier with prefix 'REL-'."
+    },
+    "from_id": {
+      "type": "string",
+      "pattern": "^LES-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+      "description": "Origin Lesion ID."
+    },
+    "to_id": {
+      "type": "string",
+      "pattern": "^LES-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+      "description": "Target Lesion ID."
+    },
+    "relationship": {
+      "type": "string",
+      "enum": [
+        "EVOLVED_FROM",
+        "CONTINUES_AS",
+        "POSSIBLE_CONTINUATION_OF",
+        "MERGED_WITH",
+        "SPLIT_FROM",
+        "REAPPEARED_AS",
+        "LOCATED_IN",
+        "OVERLAPS"
+      ],
+      "description": "Canonical graph relationship type."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Probabilistic confidence score."
+    },
+    "confidence_type": {
+      "type": "string",
+      "enum": ["model", "human", "hybrid", "deterministic"]
+    },
+    "method": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "spatial_registration",
+          "morphologic_similarity",
+          "temporal_continuity",
+          "radiomic_signature_matching"
+        ]
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["proposed", "accepted", "rejected", "adjudicated"]
+    },
+    "provenance": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source_system", "recorded_at"],
+        "properties": {
+          "source_system": { "type": "string" },
+          "algorithm_version": { "type": "string" },
+          "recorded_at": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}
+```
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NTS_DataQualityAssessment",
+  "description": "First-class quality entity that bounds downstream model inference without directly altering clinical facts.",
+  "type": "object",
+  "required": [
+    "assessment_id",
+    "series_id",
+    "summary_state",
+    "quality_dimensions"
+  ],
+  "properties": {
+    "assessment_id": {
+      "type": "string",
+      "pattern": "^DQA-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+    },
+    "series_id": { "type": "string" },
+    "summary_state": {
+      "type": "string",
+      "enum": ["high", "moderate", "low", "unknown", "not_assessable"]
+    },
+    "quality_dimensions": {
+      "type": "object",
+      "required": ["completeness", "acquisition_quality", "comparability", "artifact_level"],
+      "properties": {
+        "completeness": { "type": "string", "enum": ["complete", "missing_required_sequences", "partial"] },
+        "acquisition_quality": { "type": "string", "enum": ["btip_compliant", "non_standard", "unusable"] },
+        "comparability": { "type": "string", "enum": ["identical_protocol", "cross_scanner_compatible", "incomparable"] },
+        "registration_quality": { "type": "string", "enum": ["sub_voxel", "acceptable", "failed"] },
+        "artifact_level": { "type": "string", "enum": ["none", "minor_motion", "severe_distortion", "metal_susceptibility"] },
+        "metadata_integrity": { "type": "boolean" },
+        "segmentation_quality": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      }
+    },
+    "limits_and_conditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["target_inference", "constraint"],
+        "properties": {
+          "target_inference": { "type": "string" },
+          "constraint": { "type": "string", "enum": ["DEFER", "REDUCE_CONFIDENCE", "INVALIDATE"] },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  }
+}
+```
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NTS_EventEnvelope",
+  "description": "Bitemporal append-only event log envelope for all state mutations.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "entity_type",
+    "entity_id",
+    "episode_id",
+    "effective_at",
+    "recorded_at",
+    "source",
+    "payload"
+  ],
+  "properties": {
+    "event_id": { "type": "string", "pattern": "^EVT-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$" },
+    "event_type": { "type": "string" },
+    "schema_version": { "type": "string", "default": "0.1" },
+    "entity_type": { "type": "string" },
+    "entity_id": { "type": "string" },
+    "episode_id": { "type": "string", "pattern": "^TEP-.*" },
+    "effective_at": { "type": "string", "format": "date-time", "description": "Bitemporal: Event time in real world." },
+    "recorded_at": { "type": "string", "format": "date-time", "description": "Bitemporal: System ingestion timestamp." },
+    "source": {
+      "type": "object",
+      "required": ["system", "source_id"],
+      "properties": {
+        "system": { "type": "string" },
+        "source_id": { "type": "string" }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["system", "clinician", "model"] },
+        "id": { "type": "string" }
+      }
+    },
+    "correlation_id": { "type": "string" },
+    "causation_id": { "type": "string" },
+    "payload": { "type": "object" }
+  }
+}
+```
+
+---
+
+### Leakage-Controlled Validation & Product Roadmap
+
+To prevent the **27% AUC performance inflation** caused by standard cross-validation with full-cohort feature selection, the validation pipeline for the **Overlay365 Neuro Response Engine** strictly embeds all preprocessing and feature selection within outer/inner cross-validation loops.
+
+```text
+                     RESPONSE ENGINE VALIDATION PIPELINE
+                                     │
+      ┌──────────────────────────────┴──────────────────────────────┐
+      ▼                                                             ▼
+OUTER LOOP (Stratified 5-Fold, 3 Repeats)                     PREPROCESSING (Within Fold)
+ ├─ Evaluate final model on held-out test fold                 ├─ Z-score normalization (train params)
+ └─ Report uninflated AUC, C-index, & stability                ├─ Variance filter (<0.01 removed)
+                                                               └─ Correlation filter (|r| > 0.95 removed)
+                                                                            │
+      ┌─────────────────────────────────────────────────────────────────────┘
+      ▼
+INNER LOOP (Within Training Fold Only)
+ ├─ Feature selection (Mutual Information / LASSO)
+ ├─ Model selection (Random Forest, Logistic Regression, Gradient Boosting)
+ └─ Hyperparameter tuning & discretization check (binWidth check ≥16 gray levels)
+```
+
+---
+
+#### Phase 1: Foundation & NTS Graph Kernel (Months 0–3)
+* **Engineering Deliverable**: Implement append-only event store and materialized **Neuro Tumor State API** (`/v1/tumor-episodes/{id}/state`).
+* **Core Primitives**:
+  * Persistent UUIDv7 entities (`Patient`, `TumorEpisode`, `Lesion`, `SpatialRegion`).
+  * Bitemporal event logging (`effective_at` vs. `recorded_at`).
+  * Bitemporal state snapshots (`NTS-SNAPSHOT-000042`) to lock data contexts for model execution.
+* **Validation Benchmark**: Verify 100% reproducible state reconstruction from raw event replay.
+
+---
+
+#### Phase 2: Imaging Core, Quality Gates, & Lesion Continuity (Months 3–6)
+* **Engineering Deliverable**: Open segmentation adapter layer (ingesting **nnU-Net**, **Raidionics**, **icobrain**, **Neosoma**) paired with DICOMweb PS3.18 / HL7 FHIR interfaces.
+* **Core Primitives**:
+  * `LesionRelationship` graph engine (`EVOLVED_FROM`, `CONTINUES_AS`, `MERGED_WITH`, `SPLIT_FROM`) preventing identity loss across >3 treatment waves.
+  * `DataQualityAssessment` module evaluating completeness (e.g., flagging DWI datasets outside accepted ADC ranges), noise, and registration.
+  * Radiation-biology spatial overlay (`WITHIN_DOSE_REGION` matching high-dose RT fields).
+* **Validation Benchmark**: Achieve sub-voxel image coregistration quality and zero loss of lesion identity across multi-scan series.
+
+---
+
+#### Phase 3: Leakage-Controlled Response Engine & RANO 2.0 (Months 6–12)
+* **Engineering Deliverable**: Launch **Treatment-Aware Response Engine** incorporating versioned RANO 2.0 logic (12-week post-RT confirmation windows, post-RT baselines, IDH-stratified T2/FLAIR rules).
+* **Core Primitives**:
+  * **Nested Cross-Validation Framework**: Enforce 5-fold outer / 3-fold inner cross-validation. Run \\(Z\\)-score normalization, variance filtering, and correlation filtering strictly inside outer training folds.
+  * **Discretization & Shape Feature Prioritization**: Correct intensity quantization to ensure \\(\ge 16\\) gray levels, preventing texture degradation. Prioritize IBSI-compliant **whole-tumor surface area** and **mesh volume** shape features, which maintain 87% fold stability under nested CV.
+  * **5-State Uncertainty & Abstention Engine**: Output explicit uncertainty (`DATA_UNKNOWN`, `DATA_CONFLICT`, `DATA_LOW_QUALITY`, `MODEL_UNCERTAIN`, `CLINICALLY_INDETERMINATE`) rather than forcing binary predictions.
+* **Validation Benchmark**: Demonstrate uninflated 1-year mortality prediction AUC (\\(\ge 0.85\\) using shape + clinical features) and zero data leakage across all 15 outer validation folds.
+
+---
+
+#### Phase 4: Molecular Passport & Neuro-Oncology Tumor Board (Months 12–18)
+* **Engineering Deliverable**: Automated, structured **Molecular Tumor Passport** and **Multidisciplinary Tumor Board Engine**.
+* **Core Primitives**:
+  * Computable `GenomicObservation` mapped to HL7 Genomics Reporting IG.
+  * Automated **Contradiction Detection** (`clinical_vs_imaging`, `imaging_vs_imaging`, `pathology_vs_molecular`) flagging steroid-imaging discordance.
+  * Deterministic **Trial Intelligence Engine** parsing eligibility over NTS state without generating false negatives for missing data.
+* **Validation Benchmark**: Reduce multidisciplinary tumor board case preparation time from 120 minutes to under 30 minutes while preserving 100% clinician review fidelity.
+
+---
+
+#### Phase 5: Multi-Center Research Network & Federated Learning (Months 18–30)
+* **Engineering Deliverable**: Multi-institution federated learning network supporting cross-site validation without centralizing raw DICOM/PHI records.
+* **Core Primitives**:
+  * ComBat radiomic feature harmonization across 1.5T, 3T, and 7T scanners.
+  * Multi-center out-of-distribution (OOD) safety checks.
+  * Regulatory tiering (decoupling non-device workflow display from Class II CADx image analysis functions per FDA CDS guidance).
+* **Validation Benchmark**: Achieve multi-center prospective validation across heterogeneous hospital scanners with consistent model calibration.
+
+---
+
+🧠 **Would you like to explore the implementation of a specific component—such as writing the Python code for the nested cross-validation pipeline or defining the FHIR mapping for the Molecular Tumor Passport?**

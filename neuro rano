@@ -1,0 +1,41 @@
+In the **Overlay365 Neuro** engine, quantitative perfusion metrics—specifically relative Cerebral Blood Volume (**\\(rCBV\\)** from DSC-MRI) and the volume transfer coefficient (**\\(K^{\text{trans}}\\)** / plasma volume **\\(V_p\\)** from DCE-MRI)—are integrated into the **RANO 2.0 Response Assessment** framework and mapped within the **3D Spatial Tensor Overlay**.
+
+---
+
+### 1. Integration into RANO 2.0 Response Assessment
+
+* **Differentiating True Progression from Pseudoprogression**:
+  * **\\(rCBV\\) (Microvascular Density)**: True neoplastic progression exhibits intense neoangiogenesis and elevated \\(rCBV\\), whereas treatment-induced pseudoprogression or radiation necrosis shows reduced blood volume (low \\(rCBV\\)). 
+  * **\\(K^{\text{trans}}\\) (Microvascular Permeability)**: Measures gadolinium extravasation across a disrupted blood-brain barrier. While both active tumor and acute radiation injury increase permeability, true recurrence shows sustained high \\(V_p\\) and \\(K^{\text{trans}}\\) alongside elevated \\(rCBV\\).
+  * Combining perfusion metrics with diffusion (ADC) improves the area under the curve (AUC) for identifying pseudoprogression to **0.90–0.94**, compared to conventional anatomical imaging alone.
+* **Adjudicating the RANO 2.0 12-Week Post-RT Window**:
+  * RANO 2.0 mandates that prospective lesion enlargement within 12 weeks of completing radiotherapy be classified as *preliminary Progressive Disease*, requiring a mandatory confirmation scan 4 to 8 weeks later.
+  * During this 12-week window, the response engine uses quantitative \\(rCBV\\) and \\(K^{\text{trans}}\\) thresholds to flag lesions with low \\(rCBV\\) as likely **treatment effects / radiation injury**, preventing premature discontinuation of effective therapy.
+* **IDH-Stratified Response Rules**:
+  * In **IDH-wildtype glioblastoma**, non-enhancing T2/FLAIR hyperintensity is excluded from target metrics (attributed to vasogenic edema), placing primary evaluation on contrast-enhancing T1ce subregions where \\(rCBV\\) and \\(K^{\text{trans}}\\) metrics are calculated.
+
+---
+
+### 2. Spatial Mapping in the 3D Spatial Tensor Overlay Stack
+
+```text
+3D SPATIAL TENSOR OVERLAY (1mm³ Isotropic MRI Voxel Grid)
+ ├── Layer 1: Anatomical MRI (3D T1ce / T2 / FLAIR)
+ ├── Layer 2: Volumetric Segmentation Masks (ET, TC, WT / SOV cm³)
+ ├── Layer 3: Coregistered Perfusion Voxel Matrices (rCBV & Ktrans Maps)
+ ├── Layer 4: DICOM-RT 3D Spatial Dose Grid (>60 Gy High-Dose Field)
+ └── Layer 5: Reaction-Diffusion Secretome (C_SASP) & Tissue SoH Decay Fields
+```
+
+1. **Subregion Habitat Extraction**:
+   * Multi-parametric perfusion maps (\\(rCBV\\) and \\(K^{\text{trans}}\\)) are resampled to isotropic \\(1\text{ mm}^3\\) voxel matrices and mapped across segmented tumor habitats: Enhancing Tumor (**ET**), Tumor Core (**TC**), and Whole Tumor/Edema (**WT**).
+   * The engine calculates 90th percentile and mean \\(rCBV\\) / \\(K^{\text{trans}}\\) ratios normalized against normal-appearing white matter (NAWM).
+2. **Spatial-Radiation Dose Coregistration**:
+   * By overlaying \\(rCBV\\) and \\(K^{\text{trans}}\\) maps onto treatment planning DICOM-RT dose grids, the engine evaluates whether hyperpermeable voxels fall **within high-dose radiation fields** (\\(\ge 60\text{ Gy}\\)) or **out-of-field**.
+   * High \\(K^{\text{trans}}\\) combined with low \\(rCBV\\) inside the 60 Gy field indicates high-dose radiation necrosis, whereas elevated \\(rCBV\\) outside the high-dose margin flags out-of-field recurrence.
+3. **Coupling to Secretome & State-of-Health (SoH) PDEs**:
+   * Microvascular permeability (\\(K^{\text{trans}}\\)) serves as a spatial boundary condition for the **3D Reaction-Diffusion PDE Solver**, modeling how senescent glia secrete inflammatory cytokines (\\(C_{\text{SASP}}\\)) across permeable vessel walls into surrounding healthy brain tissue.
+
+---
+
+💡 **Suggested Next Step**: Would you like to explore how these spatial perfusion maps help resolve instances of **PET-MRI discordance** (where metabolic PET uptake clashes with MRI perfusion) during multidisciplinary tumor board reviews?

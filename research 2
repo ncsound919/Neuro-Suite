@@ -1,0 +1,915 @@
+Yes. After reviewing the current neuro-oncology/imaging landscape through September 2026, I would **not** build “another AI brain-tumor segmentation tool.”
+
+The more valuable opportunity is to build a **Neuro-Oncology Operating System**: one software environment that reconstructs the patient’s tumor as a continuously updated biological and clinical state, then uses AI to connect imaging, pathology, molecular data, treatment history, neurologic status, evidence, and clinical trials.
+
+The central object should be your **Neuro Tumor State**.
+
+## 1. What the field is actually struggling with
+
+The biggest software opportunity is not a lack of images or AI models. There are already strong point solutions for segmentation, volumetrics, radiation planning and metastasis tracking. Brainlab, for example, already offers AI tumor segmentation and longitudinal retreatment workflows; Cortechs/NeuroQuant offers FDA-cleared brain-tumor segmentation, volumetrics, and longitudinal metastasis tracking. ([Brainlab][1])
+
+The unresolved problem is:
+
+> **Nobody wants another image viewer. Clinicians need the entire disease trajectory assembled into one interpretable state.**
+
+### Pain-point matrix
+
+| Current pain point                              | What is broken                                                                                                                                                                                                                                                                                         | Software/AI opportunity                      |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| **Progression vs pseudoprogression**            | Conventional MRI can look worse because of treatment effect rather than viable tumor. Recent literature still describes this as unresolved; one 2026 review says conventional MRI is unreliable in roughly 30–40% of post-treatment GBM cases. ([PubMed][2])                                           | Multimodal **Response Adjudication Engine**  |
+| **Loss of lesion identity over time**           | Brain-metastasis reports often become snapshots instead of a continuous lesion history. In a 2026 study, continuity deteriorated sharply as metastatic waves increased, with complete loss of continuity in patients with >3 waves. ([PubMed][3])                                                      | Persistent **Lesion Identity Graph**         |
+| **Serial MRI comparison is laborious**          | Prior scans, current scans, RT plans and contours frequently must be manually assembled. A 2026 workflow that automatically fused prior RT contours with follow-up MRI cut review time from 7.97 to 3.95 minutes per case and increased full inter-reader agreement from 72.4% to 93.5%. ([PubMed][4]) | Automated longitudinal imaging workspace     |
+| **Scanner/protocol variability**                | Different scanners and acquisition protocols can make a biologically unchanged lesion appear different. 2026 work specifically addresses longitudinal MRI harmonization for brain metastases. ([Nature][5])                                                                                            | MRI **Quality + Harmonization Engine**       |
+| **Imaging, pathology and genomics are siloed**  | Glioma care increasingly requires integrated diagnosis, but MRI, pathology, molecular testing and treatment histories are often evaluated separately. ([PubMed][6])                                                                                                                                    | **Neuro Tumor State Graph**                  |
+| **Molecular diagnosis is increasingly complex** | WHO CNS5 relies heavily on molecular findings; many CNS tumor diagnoses cannot be reliably made according to current criteria without molecular testing. ([PubMed][7])                                                                                                                                 | Molecular completeness/reconciliation engine |
+| **Tumor heterogeneity isn't represented well**  | A single diagnosis or biomarker can conceal different tumor cell states and spatial ecosystems. A 2026 Nature Neuroscience study integrated spatial and single-cell data from 100 GBM patients and identified reproducible malignant cellular communities. ([Nature][8])                               | Spatial/radiographic tumor habitat model     |
+| **Clinical trial matching is manual**           | Eligibility depends on diagnosis, biomarkers, prior therapies, timing and other constraints. A 2026 prospective oncology study tested a knowledge-graph/neuro-symbolic approach specifically because trial screening remains complex and labor-intensive. ([PubMed][9])                                | Neuro-oncology trial intelligence            |
+| **Tumor boards reconstruct the case manually**  | Radiology, neurosurgery, pathology, radiation oncology and medical oncology each hold pieces of the story. EANO explicitly emphasizes multidisciplinary coordination across these disciplines. ([EANO][10])                                                                                            | AI-generated tumor-board case state          |
+| **AI itself has a deployment problem**          | Performance can shift across scanners, institutions and populations; regulatory expectations increasingly emphasize lifecycle monitoring. ([U.S. Food and Drug Administration][11])                                                                                                                    | Built-in AI governance/drift monitoring      |
+
+---
+
+# 2. The biggest opportunity: a Neuro Tumor State
+
+I would build the entire platform around one persistent data structure:
+
+```text
+PATIENT
+   │
+   └── NEURO TUMOR EPISODE
+         │
+         ├── Diagnosis / WHO state
+         ├── Molecular state
+         ├── Pathology
+         ├── Imaging timeline
+         │     ├── MRI
+         │     ├── PET
+         │     ├── Perfusion
+         │     ├── Diffusion
+         │     └── Spectroscopy
+         │
+         ├── Lesion graph
+         │     ├── Lesion #001
+         │     ├── Lesion #002
+         │     └── Lesion #003
+         │
+         ├── Surgery
+         ├── Radiation
+         ├── Systemic therapy
+         ├── Steroids / supportive treatment
+         ├── Neurologic state
+         ├── RANO state
+         ├── Treatment-response state
+         ├── Evidence state
+         ├── Trial eligibility
+         └── Outcome trajectory
+```
+
+That becomes the platform's **single source of truth**.
+
+Every new MRI updates the state.
+
+Every pathology result updates the state.
+
+Every mutation updates the state.
+
+Every therapy updates the state.
+
+Every new lesion gets an identity.
+
+Every response assessment gets a timepoint.
+
+Every AI prediction gets attached to the evidence that produced it.
+
+That is much harder to replicate than an isolated segmentation model.
+
+---
+
+# 3. Module #1 — Longitudinal Imaging Engine
+
+This should be your first major clinical product.
+
+### The workflow
+
+A clinician opens a patient and sees:
+
+**Scan 1 → Scan 2 → Scan 3 → Scan 4 → Current**
+
+The system automatically:
+
+* finds the appropriate prior MRI
+* registers the images
+* corrects for relevant alignment differences
+* detects missing/incompatible sequences
+* tracks lesions
+* propagates lesion identity
+* calculates volume
+* calculates 2D measurements
+* measures growth rate
+* overlays prior radiation contours
+* shows new vs persistent vs disappearing lesions
+* generates the RANO 2.0 measurements
+
+RANO 2.0 specifically recommends post-radiotherapy MRI as the baseline in newly diagnosed gliomas and allows volumetric measurements when resources permit. It also recognizes that advanced imaging and automated AI assessment still require additional validation before formal incorporation into response criteria. ([OUP Academic][12])
+
+This creates an important opportunity:
+
+### Don't make the AI say only:
+
+> "Tumor grew 18%."
+
+Make it say:
+
+> **Lesion 001**
+>
+> Volume: 3.2 → 4.8 cm³
+> +50%
+>
+> Enhancing component ↑
+> FLAIR component stable
+> Perfusion ↑
+> Within prior high-dose RT field
+> 6 weeks post-RT
+> Steroid dose declining
+>
+> **Assessment: indeterminate treatment-related change vs progression**
+>
+> Evidence supporting each interpretation shown separately.
+
+That is far more clinically useful.
+
+---
+
+# 4. Module #2 — The Response Adjudication Engine
+
+This could become the intellectual centerpiece of the product.
+
+The software should combine:
+
+### Imaging
+
+* T1
+* post-contrast T1
+* T2
+* FLAIR
+* DWI
+* ADC
+* DSC/DCE perfusion
+* MRS
+* amino-acid PET when available
+
+Advanced MRI and PET are increasingly important, but the literature continues to emphasize limitations, protocol variation and lack of a universally definitive imaging strategy. ([PubMed][13])
+
+### Treatment context
+
+* date of surgery
+* date of radiation
+* radiation dose/field
+* chemotherapy
+* immunotherapy
+* antiangiogenic therapy
+* reirradiation
+* treatment interruptions
+
+### Biology
+
+* IDH
+* MGMT
+* TERT
+* EGFR
+* CDKN2A/B
+* BRAF
+* H3 alterations
+* 1p/19q
+* methylation class
+* other relevant molecular findings
+
+### Clinical trajectory
+
+* neurologic exam
+* performance status
+* symptom changes
+* seizure activity
+* steroid changes
+
+Then calculate an **Evidence State** rather than pretending there is a perfectly certain answer.
+
+For example:
+
+```text
+DISEASE STATE
+Progressing ........ 42%
+Treatment effect ... 41%
+Mixed .............. 17%
+
+Confidence: LOW
+
+Primary evidence:
++ increasing perfusion
++ increasing enhancing volume
++ outside previous RT high-dose region
+
+Counter-evidence:
++ timing compatible with treatment effect
++ stable FLAIR
++ steroid reduction
+```
+
+The actual probability model would need prospective validation. At the product level, the important innovation is the **structure of evidence**, not a flashy prediction number.
+
+---
+
+# 5. Module #3 — Lesion Identity Graph
+
+This is particularly powerful for brain metastases.
+
+Instead of storing:
+
+> MRI report, Jan 1
+> MRI report, Mar 3
+> MRI report, May 4
+
+you store:
+
+```text
+LESION 001
+ ├── first detected
+ ├── coordinates
+ ├── size trajectory
+ ├── treatment
+ ├── RT dose
+ ├── response
+ ├── recurrence
+ └── current state
+
+LESION 002
+ ├── first detected
+ ├── treated with SRS
+ ├── shrank
+ ├── regrew
+ └── radiation-effect probability
+
+LESION 003
+ ├── new
+ ├── never irradiated
+ └── untreated
+```
+
+This addresses a real documented problem: longitudinal reports lose lesion identity as cases become complex. ([PubMed][3])
+
+A clinician should be able to click **Lesion 002** and see its entire history.
+
+That is a major product concept.
+
+---
+
+# 6. Module #4 — MRI Quality & Harmonization Layer
+
+This is less sexy than AI diagnosis but potentially very valuable.
+
+Before the model interprets a scan, the platform should ask:
+
+```text
+Can this scan safely be compared with prior imaging?
+```
+
+Check:
+
+* scanner vendor
+* field strength
+* sequence
+* voxel size
+* slice thickness
+* contrast timing
+* motion
+* signal quality
+* distortion
+* missing sequences
+* acquisition changes
+
+Then generate:
+
+### Imaging comparability score
+
+```text
+LONGITUDINAL COMPARABILITY
+
+T1 CE ............ 94%
+FLAIR ............ 87%
+DWI .............. 61%
+Perfusion ........ 72%
+
+Overall: MODERATE
+```
+
+The software could then warn:
+
+> "Apparent change may be influenced by acquisition differences."
+
+This matters because scanner-related variation is a recognized obstacle in longitudinal neuroimaging and multicenter AI development. ([Nature][5])
+
+---
+
+# 7. Module #5 — Molecular + Pathology Intelligence
+
+The platform should have a **Molecular Passport**.
+
+For example:
+
+```text
+WHO CNS STATE
+
+Adult-type diffuse glioma
+IDH: mutant
+1p/19q: intact
+ATRX: loss
+TP53: altered
+MGMT: methylated
+CDKN2A/B: intact
+Methylation class: ...
+```
+
+But the important part is not merely displaying the values.
+
+The software should detect:
+
+### Missing diagnostics
+
+> MGMT unavailable
+
+> Methylation classification recommended/not completed
+
+> IDH result conflicts with pathology interpretation
+
+> Molecular result pending
+
+> Tissue insufficient
+
+That directly addresses a real problem: molecular testing is now central to CNS tumor classification, yet testing practices vary substantially between institutions. ([PubMed][7])
+
+AI can become an assistant here too.
+
+A 2026 Nature Cancer study, Hetairos, used H&E histology to predict 102 CNS methylation-based subtypes. In a prospective routine-diagnostic evaluation reported in that study, the system reduced a molecular-testing turnaround process from 12 days to about 12 minutes for the AI-supported prediction step. That is promising evidence for workflow acceleration, but it is not a reason to replace confirmatory molecular testing. ([Nature][14])
+
+Your system should therefore treat AI pathology as:
+
+> **diagnostic acceleration + test orchestration**
+
+not:
+
+> "AI replaces pathology."
+
+---
+
+# 8. Module #6 — Tumor Board Intelligence
+
+This is where the entire system becomes much more useful than an imaging application.
+
+Before the tumor board, the software automatically produces:
+
+## Neuro-Oncology Case Brief
+
+**Current diagnosis**
+
+**Molecular state**
+
+**Latest MRI**
+
+**Prior MRI trajectory**
+
+**Tumor volume trajectory**
+
+**Radiation map**
+
+**Therapy history**
+
+**Neurologic trajectory**
+
+**Current uncertainty**
+
+**Relevant biomarkers**
+
+**Potential trials**
+
+**Questions requiring multidisciplinary decision**
+
+Then each specialty gets its own view.
+
+### Neurosurgery
+
+Tumor location
+tract proximity
+resection cavity
+functional areas
+
+### Neuroradiology
+
+Longitudinal image analysis
+RANO
+perfusion
+lesion evolution
+
+### Radiation oncology
+
+Dose distribution
+prior targets
+retreatment possibilities
+
+### Medical oncology
+
+Molecular state
+therapy history
+trial opportunities
+
+### Neuropathology
+
+Integrated diagnosis
+histology
+methylation
+molecular conflicts
+
+That is the actual "single software" experience.
+
+---
+
+# 9. Module #7 — Clinical Trial Intelligence
+
+The system should continuously examine:
+
+```text
+CURRENT PATIENT STATE
+        ↓
+Diagnosis
+Molecular profile
+Age
+Prior therapies
+RT history
+Disease status
+Recurrence status
+Location
+Performance status
+Prior treatments
+        ↓
+TRIAL DATABASE
+        ↓
+Eligibility reasoning
+        ↓
+Potentially relevant trials
+```
+
+Importantly, every inclusion/exclusion criterion should show **why**:
+
+```text
+TRIAL X
+
+Eligible:
+✓ IDH status
+✓ prior radiation
+✓ recurrence interval
+
+Unknown:
+? performance requirement not documented
+
+Not eligible:
+✗ prior agent requirement unmet
+```
+
+A 2026 prospective study in 3,804 oncology patients evaluated neuro-symbolic AI, knowledge graphs and human review specifically for trial matching, reflecting the continuing difficulty of screening complex eligibility criteria manually. ([PubMed][9])
+
+For your platform, trial matching becomes another output of the **Neuro Tumor State**, rather than a separate application.
+
+---
+
+# 10. Module #8 — Evidence Engine
+
+This fits very naturally into what you're already building.
+
+The clinician should be able to ask:
+
+> "Why is the system calling this indeterminate?"
+
+and get:
+
+```text
+Patient evidence
+↓
+Imaging evidence
+↓
+Treatment context
+↓
+Molecular evidence
+↓
+Relevant RANO criteria
+↓
+Published evidence
+↓
+Clinical trials
+```
+
+Every AI conclusion should have a **source/evidence trail**.
+
+That is especially important because current research increasingly favors multimodal AI, but the gap between benchmark performance and safe real-world clinical usefulness remains substantial. A 2026 Nature Biomedical Engineering review specifically emphasizes data scarcity, domain heterogeneity, interpretability, workflow integration and safety as major barriers for biomedical foundation models. ([Nature][15])
+
+So don't build:
+
+> "ChatGPT for neuro-oncology."
+
+Build:
+
+> **Evidence-linked neuro-oncology reasoning infrastructure.**
+
+---
+
+# 11. Module #9 — Dynamic Tumor Biology
+
+This is where your longer-term research moat becomes interesting.
+
+The tumor should not be represented as:
+
+> "Glioblastoma."
+
+It should become:
+
+```text
+CURRENT STATE
+
+Clone
+State
+Location
+Microenvironment
+Treatment pressure
+Imaging phenotype
+Molecular phenotype
+Response phenotype
+```
+
+This is consistent with the direction of current GBM research. Spatial/single-cell studies increasingly show multiple malignant cellular communities and distinct microenvironments rather than a single homogeneous tumor. ([Nature][8])
+
+Your software could eventually construct:
+
+### Tumor habitats
+
+```text
+Habitat A
+high perfusion
+high cellularity
+enhancing
+
+Habitat B
+hypoxic
+necrotic
+low perfusion
+
+Habitat C
+infiltrative
+FLAIR dominant
+non-enhancing
+```
+
+Then connect those regions to:
+
+* pathology
+* molecular state
+* treatment exposure
+* recurrence
+* spatial transcriptomics
+* radiomics
+
+That starts turning imaging into a **map of tumor evolution**, not merely a picture.
+
+---
+
+# 12. What I would NOT build first
+
+This is important.
+
+### Don't start with:
+
+**A generic PACS replacement.**
+
+Too large and unnecessary.
+
+**Another generic tumor segmentation model.**
+
+Brainlab and NeuroQuant are already very advanced in this area. ([Brainlab][1])
+
+**A generic medical chatbot.**
+
+Weak moat.
+
+**A black-box survival predictor.**
+
+Interesting research, but weak day-to-day workflow value.
+
+**Autonomous treatment recommendations.**
+
+High clinical and regulatory burden before you have the data foundation.
+
+Instead, build the **orchestration layer above the existing systems**.
+
+---
+
+# 13. The actual MVP
+
+I would make the first release extremely focused.
+
+## Overlay365 Neuro — Neuro Tumor State
+
+### The "one-screen" workflow
+
+A clinician opens a patient.
+
+They immediately see:
+
+```text
+┌─────────────────────────────────────────┐
+│ NEURO TUMOR STATE                       │
+├─────────────────────────────────────────┤
+│ Diagnosis: GBM                          │
+│ IDH: WT        MGMT: Meth.              │
+│ Current therapy: ...                    │
+├─────────────────────────────────────────┤
+│ MRI TRAJECTORY                          │
+│ Scan 1 → Scan 2 → Scan 3 → CURRENT     │
+│                                         │
+│ Volume: ↑ 18%                           │
+│ Enhancing: ↑                            │
+│ FLAIR: stable                           │
+│ Perfusion: ↑                            │
+├─────────────────────────────────────────┤
+│ RADIATION OVERLAY                       │
+│ Tumor vs prior dose                     │
+├─────────────────────────────────────────┤
+│ LESION TRACKER                          │
+│ #001 stable                             │
+│ #002 enlarging                          │
+│ #003 new                                │
+├─────────────────────────────────────────┤
+│ RESPONSE STATE                          │
+│ Indeterminate                           │
+│                                         │
+│ Evidence FOR progression                │
+│ Evidence FOR treatment effect           │
+├─────────────────────────────────────────┤
+│ CLINICAL CONTEXT                        │
+│ Neurologic status                       │
+│ Steroids                                │
+│ Treatment timing                        │
+├─────────────────────────────────────────┤
+│ TRIALS / EVIDENCE                       │
+│ 3 potentially relevant trials           │
+└─────────────────────────────────────────┘
+```
+
+That is a product I would show to a neuro-oncologist.
+
+---
+
+# 14. Development roadmap
+
+## Phase 0 — Clinical architecture
+
+**0–2 months**
+
+Build:
+
+* Neuro Tumor State schema
+* data ontology
+* patient/tumor/lesion identity
+* DICOM ingestion
+* longitudinal timeline
+* molecular data structure
+* treatment timeline
+* audit logging
+
+Do not start by training giant models.
+
+---
+
+## Phase 1 — Imaging MVP
+
+**2–6 months**
+
+Build:
+
+* automatic prior scan matching
+* registration
+* lesion tracking
+* tumor segmentation
+* volume measurement
+* RANO 2.0 calculations
+* RT contour fusion
+* longitudinal visualization
+* scan quality/comparability scoring
+
+The proof-of-value target should be **time saved + consistency + lesion continuity**, not AI accuracy alone.
+
+Recent studies already show that this type of workflow can materially reduce review burden, which gives you a realistic validation hypothesis. ([PubMed][16])
+
+---
+
+## Phase 2 — Multimodal Neuro Tumor State
+
+**6–12 months**
+
+Add:
+
+* pathology
+* sequencing
+* methylation
+* treatment history
+* steroids
+* neurologic state
+* perfusion
+* diffusion
+* PET
+* tumor-board generation
+
+Now the platform becomes genuinely different.
+
+---
+
+## Phase 3 — Response Intelligence
+
+**12–18 months**
+
+Develop and validate:
+
+* treatment-effect vs progression model
+* radiomics
+* temporal trajectory models
+* treatment-aware inference
+* uncertainty estimation
+* explainability
+* patient-specific evidence graphs
+
+This is where your research program becomes important.
+
+---
+
+## Phase 4 — Research Network
+
+**18–30 months**
+
+Add:
+
+* federated learning
+* multicenter studies
+* institutional benchmarking
+* trial matching
+* research cohort discovery
+* spatial biology
+* liquid biomarkers
+* radiogenomics
+
+Federated learning is already being investigated specifically for brain-tumor models because centralized datasets face privacy, access and heterogeneity barriers. ([Nature][17])
+
+---
+
+# 15. The moat
+
+The moat should **not** be "we have an AI segmentation model."
+
+That can eventually be duplicated.
+
+Your moat is:
+
+```text
+                   NEURO TUMOR STATE
+                          │
+          ┌───────────────┼───────────────┐
+          ↓               ↓               ↓
+       IMAGING        BIOLOGY          CLINICAL
+          │               │               │
+     MRI / PET       Genomics          Therapy
+     Perfusion       Methylation       RT
+     DWI             Pathology         Steroids
+     Lesions         Histology         Neurology
+          │               │               │
+          └───────────────┼───────────────┘
+                          ↓
+                 TEMPORAL EVOLUTION
+                          ↓
+                  RESPONSE STATE
+                          ↓
+             EVIDENCE + TRIAL STATE
+                          ↓
+                 CLINICAL WORKFLOW
+```
+
+Every patient generates structured longitudinal data.
+
+Every correction by a radiologist becomes feedback.
+
+Every tumor-board decision becomes labeled data.
+
+Every progression confirmation improves future modeling.
+
+Every lesion stays linked across time.
+
+That creates a **clinical longitudinal dataset that is much harder to reproduce** than a public MRI segmentation dataset.
+
+---
+
+# 16. One very important strategic decision
+
+I would architect the software from day one as **two layers**:
+
+### Layer A — Clinical workflow
+
+Deterministic, explainable, auditable:
+
+* measurements
+* segmentation
+* registration
+* RANO
+* lesion tracking
+* pathology integration
+* treatment timeline
+* reporting
+
+### Layer B — AI research layer
+
+Probabilistic:
+
+* progression probability
+* radiogenomics
+* treatment-response modeling
+* tumor habitats
+* recurrence prediction
+* trial matching
+* biological state inference
+
+That separation makes the system much easier to validate, improve and eventually regulate.
+
+This matters because FDA's 2026 guidance continues to distinguish software functions by intended use, while its current AI framework emphasizes lifecycle monitoring, evidence, transparency and controlled model changes. FDA also finalized updated clinical-decision-support guidance in January 2026. ([U.S. Food and Drug Administration][18])
+
+I would design the model/versioning infrastructure around that from the beginning.
+
+---
+
+# 17. Where the field appears to be heading
+
+The direction is becoming unusually clear.
+
+In September 2026, IARC announced the EUcanAI project, a four-year effort to build networked AI systems specialized across brain-tumor care steps including consultation, diagnosis and therapy. ([IARC][19])
+
+EANO 2026 is also occurring **right now, September 24–27, 2026**, bringing together neuro-oncology, neurosurgery, neuropathology, neuroradiology, radiation oncology and other disciplines around precision diagnostics and management. ([EANO][20])
+
+So the strategic opening is not:
+
+> "Can AI segment a brain tumor?"
+
+That problem is already being solved.
+
+It is:
+
+> **Can software maintain a living, evidence-linked model of the patient's brain tumor across time and across specialties?**
+
+That is the product I would build.
+
+## My proposed product architecture
+
+**Overlay365 Neuro**
+
+**Core:** Neuro Tumor State
+
+**Clinical pillars:**
+
+1. **Imaging Intelligence**
+2. **Lesion Tracking**
+3. **RANO / Response Engine**
+4. **Pathology & Molecular State**
+5. **Treatment & Radiation State**
+6. **Tumor Board**
+7. **Clinical Trial Intelligence**
+8. **EvidenceHub**
+9. **Research / Radiogenomics**
+10. **AI Governance**
+
+And the first killer workflow should be:
+
+> **"This patient's MRI looks worse. Is this progression, treatment effect, or something we cannot yet distinguish — and what evidence do we have?"**
+
+That one problem touches imaging, radiation, molecular biology, treatment history, clinical status, AI, evidence retrieval and multidisciplinary decision-making. It gives you a far more defensible foundation for a true **one-software neuro-oncology suite** than starting with a collection of disconnected AI tools.
+
+[1]: https://www.brainlab.com/ai-solutions/?utm_source=chatgpt.com "AI in healthcare: powering the future of medtech | Brainlab"
+[2]: https://pubmed.ncbi.nlm.nih.gov/42565942/?utm_source=chatgpt.com "Distinguishing true progression from treatment effects in glioblastoma: a practical, evidence-graded imaging framework for the multidisciplinary team."
+[3]: https://pubmed.ncbi.nlm.nih.gov/41597481/?utm_source=chatgpt.com "Temporal Dynamics and Heterogeneity in Brain Metastases: A Single-Center Retrospective Analysis of Vulnerabilities in Current MRI Surveillance Practices - PubMed"
+[4]: https://pubmed.ncbi.nlm.nih.gov/42131765/?utm_source=chatgpt.com "AI-based framework to fuse pre-RT brain metastases contours with follow-up MRI to improve post-RT assessment."
+[5]: https://www.nature.com/articles/s41598-026-43755-7?utm_source=chatgpt.com "Development of head-to-head and longitudinal CycleGAN algorithm for MRI harmonization: validation in follow-up MRI evaluation in patients with brain metastasis | Scientific Reports"
+[6]: https://pubmed.ncbi.nlm.nih.gov/42707603/?utm_source=chatgpt.com "From data silos to integrated diagnosis: multimodal machine learning in glioblastoma."
+[7]: https://pubmed.ncbi.nlm.nih.gov/39724142/?utm_source=chatgpt.com "Molecular Testing for the World Health Organization Classification of Central Nervous System Tumors: A Review - PubMed"
+[8]: https://www.nature.com/articles/s41593-026-02265-5?utm_source=chatgpt.com "Spatial and single-cell characterization of human glioblastoma tumor microenvironment reveals malignant cellular communities | Nature Neuroscience"
+[9]: https://pubmed.ncbi.nlm.nih.gov/42004487/?utm_source=chatgpt.com "Transforming oncology clinical trial matching through neuro-symbolic, multi-agent AI and an oncology-specific knowledge graph: a prospective evaluation in 3804 patients - PubMed"
+[10]: https://www.eano.eu/?utm_source=chatgpt.com "EANO - European Association of Neuro-Oncology"
+[11]: https://www.fda.gov/medical-devices/artificial-intelligence-enabled-medical-devices/predetermined-change-control-plans-machine-learning-enabled-medical-devices-guiding-principles "Predetermined Change Control Plans for Machine Learning-Enabled Medical Devices: Guiding Principles | FDA"
+[12]: https://academic.oup.com/neuro-oncology/article/26/1/2/7286265?utm_source=chatgpt.com "RANO 2.0: The revised Response Assessment in Neuro-Oncology (RANO) criteria for high- and low-grade glial tumors in adults designed for the future | Neuro-Oncology | Oxford Academic"
+[13]: https://pubmed.ncbi.nlm.nih.gov/38466087/?utm_source=chatgpt.com "Challenges, limitations, and pitfalls of PET and advanced MRI in patients with brain tumors: A report of the PET/RANO group - PubMed"
+[14]: https://www.nature.com/articles/s43018-026-01186-3 "Hetairos is a histology-based artificial intelligence model for predicting central nervous system tumor methylation subtypes | Nature Cancer"
+[15]: https://www.nature.com/articles/s41551-026-01762-z?utm_source=chatgpt.com "Foundation models in biomedical imaging: turning hype into reality | Nature Biomedical Engineering"
+[16]: https://pubmed.ncbi.nlm.nih.gov/41994001/?utm_source=chatgpt.com "Automatic longitudinal assessment of brain metastases improves detection of disease progression."
+[17]: https://www.nature.com/articles/s41598-026-69042-z?utm_source=chatgpt.com "Privacy preserving federated learning for brain tumor segmentation using multi institutional MRI data | Scientific Reports"
+[18]: https://www.fda.gov/regulatory-information/search-fda-guidance-documents/clinical-decision-support-software?trk=public_post_comment-text "Clinical Decision Support Software | FDA"
+[19]: https://www.iarc.who.int/news-events/iarc-and-partners-collaborate-on-an-ai-system-to-improve-the-diagnosis-and-treatment-of-brain-tumours/?utm_source=chatgpt.com "IARC and partners collaborate on an AI system to improve the diagnosis and treatment of brain tumours – IARC"
+[20]: https://www.eano.eu/eano2026/?utm_source=chatgpt.com "EANO 2026"

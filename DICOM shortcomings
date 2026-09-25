@@ -1,0 +1,64 @@
+The current state of DICOM (including the modern **DICOMweb PS3.18** standard) reflects an ecosystem that is ubiquitous for storing and moving images, but fundamentally unequipped for longitudinal, multi-modal intelligence. 
+
+---
+
+### 1. The Current State of DICOM: Strengths & Technical Limitations
+
+#### Where DICOM Works
+* **Universal Standard**: DICOM remains the global perimeter protocol for scanner-to-PACS routing, image storage, and viewer presentation.
+* **Integration Patterns**: Modern AI tools (such as **icobrain**, **Brainomix 360**, or **Cercare**) integrate into hospital workflows using local daemons (e.g., `icobridge`) that pull DICOM via C-STORE/C-FIND or DICOMweb (WADO-RS / STOW-RS), run cloud or local inference, and write back results to PACS as **DICOM Secondary Capture**, **Encapsulated PDFs**, or **DICOM Structured Reporting (SR)**.
+
+#### Where DICOM Hits a Wall
+1. **Rigid Hierarchy vs. Longitudinal Reality**: DICOM’s native schema is strictly hierarchical (`Patient ➔ Study ➔ Series ➔ Instance`). It has no native concept of **persistent lesion identity** across time. If a glioblastoma splits into two enhancing foci or two brain metastases merge post-radiosurgery, DICOM cannot natively link these instances as a directed lineage graph (`EVOLVED_FROM`, `MERGED_WITH`, `SPLIT_FROM`).
+2. **Static Metadata vs. Dynamic Multimodal State**: A DICOM header captures acquisition parameters (TR, TE, flip angle, field strength), but it cannot represent evolving clinical facts—such as dexamethasone steroid tapering, KPS performance score, or molecular pathology (IDH status, MGMT promoter methylation)—directly alongside the pixels.
+3. **The DICOM SR Computability Deficit**: While DICOM SR (Structured Reporting) was designed for structured findings, in practice it is notoriously rigid, vendor-siloed, and difficult to query across institutions. As a result, clinical platforms frequently collapse high-dimensional AI segmentations back down to flat 2D Secondary Capture burn-ins or static PDFs.
+4. **Quality Blindness**: DICOM headers report *nominal* scanner settings, but ignore *actual* image quality. Multicenter clinical trial audits reveal that up to **53% of diffusion MRI (DWI) datasets fail basic quality standards** due to geometric distortion or artifact levels. DICOM provides no built-in gating mechanism to prevent an AI model from executing on corrupted or incomparable data.
+5. **Siloed Domain Modalities**: Radiation oncology uses **DICOM-RT** (dose grids, target volumes), nuclear medicine uses **PET DICOM**, and diagnostic radiology uses **MRI DICOM**. In most PACS environments, these three streams sit in isolated study folders without automated spatial or temporal coregistration.
+
+---
+
+### 2. Strategic Opportunities for Innovation
+
+Rather than trying to replace DICOM inside hospital PACS, innovation lies in treating **DICOM as an interoperability perimeter protocol** while building a **graph-based state layer** behind it.
+
+```text
+ ┌─────────────────────────────────────────────────────────────────────────┐
+ │                      INTEROPERABILITY PERIMETER                         │
+ │   PACS / VNA (DICOMweb PS3.18)  │  EHR / LIS (HL7 FHIR Genomics IG)    │
+ └────────────────────┬────────────────────────────┬───────────────────────┘
+                      │                            │
+                      ▼                            ▼
+ ┌─────────────────────────────────────────────────────────────────────────┐
+ │                   OVERLAY365 NEURO STATE ENGINE                         │
+ │  1. Quality Gate (BTIP & Artifact Check before Model Execution)        │
+ │  2. Spatial-Radiation Fusion (DICOM-RT Dose Overlay on Voxel Masks)     │
+ │  3. Bitemporal Event Store (effective_at vs recorded_at Snapshots)      │
+ │  4. Persistent Lesion Graph (Directed Identity Lineage)                 │
+ └─────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Key Areas to Innovate
+
+1. **The Boundary Protocol Architecture**:
+   * Use DICOMweb (PS3.18) strictly for edge ingestion and image retrieval, mapping DICOM instances directly to an append-only, bitemporal event store (`IMAGING_STUDY_INGESTED`).
+   * Decouple clinical state and AI outputs from DICOM tags by storing them in a dedicated **Neuro Tumor State (NTS) Graph**, keeping native DICOM UIDs only for provenance mapping.
+
+2. **Imaging Quality Intelligence (Quality Gates)**:
+   * Innovate by inserting an automated **`DataQualityAssessment` engine** between PACS ingestion and downstream AI.
+   * The system inspects signal-to-noise ratios, slice thickness, and sequence completeness against protocols like **BTIP** (Brain Tumor Imaging Protocol). If motion or susceptibility renders perfusion unusable, it attaches a `LIMITS / CONDITIONS` constraint to the study, preventing false clinical inferences.
+
+3. **DICOM-RT & Spatial-Radiation/Biology Fusion**:
+   * Map DICOM-RT dose grids (e.g., from RayStation or Brainlab Elements) directly onto longitudinal volumetric MRI masks.
+   * Automatically compute spatial relationships (`WITHIN_DOSE_REGION` >60 Gy vs. marginal 45–60 Gy vs. out-of-field) to determine whether a new enhancing focus represents high-dose radiation necrosis or out-of-field recurrence.
+
+4. **Bridging DICOMweb to FHIR Genomics**:
+   * Connect DICOMweb instances directly with **HL7 FHIR Genomics Reporting IGs**.
+   * This bridges pixel-level measurements (2D SPPD / 3D SOV) with computable molecular profiles (IDH mutation, MGMT methylation, 1p/19q co-deletion) to automatically enforce IDH-stratified RANO 2.0 response rules.
+
+5. **Bitemporal Snapshotting for Regulatory & AI Auditability**:
+   * Modern DICOM overwrites or appends series without preserving exact temporal state context.
+   * Innovate by implementing **bitemporal snapshots** (`NTS-SNAPSHOT-XXXXXX`), recording both real-world event time (`effective_at`) and system ingestion time (`recorded_at`). This enables exact replay of what data was visible to a clinician or AI model at any past decision point.
+
+---
+
+💡 **Next Step Idea**: Would you like to explore how to design the API endpoints that bridge DICOMweb WADO-RS endpoints into the NTS graph, or examine how FHIR DiagnosticReport objects map to molecular observations?

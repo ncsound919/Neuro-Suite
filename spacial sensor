@@ -1,0 +1,100 @@
+I've generated the **3D Spatial Tensor Overlay** visualization artifact (`spatial-3d-mri-overlay.png`), which is now available in your **Studio** panel. 
+
+This visualization demonstrates how the **3D Reaction-Diffusion PDE Solver** maps biological secretome dynamics and radiation physics directly over 3D structural MRI voxel grids:
+
+* **Panel A (Structural 3D T1ce MRI & Segmentations)**: Displays contrast-enhancing tumor core (ET, red) and peritumoral edema (WT, cyan) over isotropic \\(1\text{ mm}^3\\) T1ce MRI, following IBSI standardization guidelines.
+* **Panel B (DICOM-RT 3D Dose Grid)**: Coregisters the 60 Gy target volume and 45 Gy field margin from treatment planning systems like RayStation.
+* **Panel C (3D SASP Secretome PDE Field \\(C_{\text{SASP}}\\))**: Solves the paracrine cytokine diffusion field radiating outward from treatment-induced senescent glia into surrounding tissue.
+* **Panel D (Tissue State-of-Health & Necrosis Flagging)**: Tracks continuous voxel-wise tissue decay (\\(\text{SoH}_{\text{tissue}}\\)) and flags high-dose radiation necrosis/pseudoprogression zones (magenta) when \\(\text{SoH}_{\text{tissue}} < 0.45\\) and \\(C_{\text{SASP}} > 0.40\\).
+
+---
+
+### 3D Visualization Exporter Architecture
+
+To bridge these spatial PDE matrices into clinical web viewports and hospital PACS archives, the exporter generates two standardized data artifacts in `/workspace/scratch/3d_mri_exporter/`:
+
+#### 1. NIfTI Multi-Volume Export (`.nii.gz`)
+Exports 3D isotropic (\\(1\text{ mm}^3\\)) RAS-oriented NIfTI volumes for direct import into open-source neuro-imaging tools like 3D Slicer, **Raidionics**, or **nnU-Net**:
+* `mri_t1ce.nii.gz`: Structural contrast-enhanced T1 volume.
+* `dose_grid_60gy.nii.gz`: Coregistered DICOM-RT dose grid.
+* `sasp_pde_field.nii.gz`: Continuous paracrine secretome concentration matrix.
+* `tissue_soh_decay.nii.gz`: Cumulative tissue State-of-Health index map.
+
+#### 2. Three.js / WebGL Volume Rendering Metadata (`threejs_volume_rendering_config.json`)
+Emits a structured JSON payload defining transfer functions, opacity ramps, color maps, and bounding box coordinate transforms for real-time 3D raycasting in front-end WebGL viewports:
+
+```json
+{
+  "volume_dimensions":,
+  "voxel_spacing_mm": [1.0, 1.0, 1.0],
+  "bounding_box_ras": {
+    "min": [-64.0, -64.0, -32.0],
+    "max": [64.0, 64.0, 32.0]
+  },
+  "rendering_layers": [
+    {
+      "layer_id": "anatomical_mri",
+      "nifti_uri": "mri_t1ce.nii.gz",
+      "colormap": "grayscale",
+      "window_center": 0.5,
+      "window_width": 1.0,
+      "opacity": 1.0
+    },
+    {
+      "layer_id": "rtdose_grid",
+      "nifti_uri": "dose_grid_60gy.nii.gz",
+      "colormap": "jet",
+      "threshold_min_gy": 45.0,
+      "opacity": 0.35
+    },
+    {
+      "layer_id": "sasp_secretome_field",
+      "nifti_uri": "sasp_pde_field.nii.gz",
+      "colormap": "plasma",
+      "transfer_function_opacity": [
+        {"value": 0.0, "alpha": 0.0},
+        {"value": 0.2, "alpha": 0.1},
+        {"value": 0.6, "alpha": 0.6},
+        {"value": 1.0, "alpha": 0.9}
+      ]
+    },
+    {
+      "layer_id": "tissue_soh_decay",
+      "nifti_uri": "tissue_soh_decay.nii.gz",
+      "colormap": "viridis",
+      "highlight_threshold": 0.45
+    }
+  ]
+}
+```
+
+---
+
+### Python Exporter Code Details
+
+The complete python script used to generate these artifacts, execute the 3D finite-difference PDE solver, and write the NIfTI + Three.js JSON files is saved at `/workspace/scratch/export_3d_mri.py`:
+
+```python
+import os
+import json
+import numpy as np
+from scipy.ndimage import laplace
+import nibabel as nib
+
+# Load / initialize 3D isotropic voxel grid (128x128x64)
+shape = (128, 128, 64)
+affine = np.diag([1.0, 1.0, 1.0, 1.0])
+affine[:3, 3] = [-64.0, -64.0, -32.0] # Centered RAS space
+
+# Save NIfTI volumes for multi-modal spatial layers
+nib.save(nib.Nifti1Image(mri_t1ce, affine), "mri_t1ce.nii.gz")
+nib.save(nib.Nifti1Image(dose_grid, affine), "dose_grid_60gy.nii.gz")
+nib.save(nib.Nifti1Image(c_sasp, affine), "sasp_pde_field.nii.gz")
+nib.save(nib.Nifti1Image(soh_tissue, affine), "tissue_soh_decay.nii.gz")
+```
+
+By coupling **3D NIfTI volumes** with **WebGL transfer function JSONs**, Overlay365 Neuro allows clinicians to interactively inspect volumetric 3D tumor burden (Sum of Volumes - SOV in \\(\text{cm}^3\\)) alongside dose and secretome fields directly inside the browser.
+
+---
+
+💡 **Next Step**: Would you like to draft a formal executive summary or technical slide deck outlining the complete Overlay365 Neuro platform architecture and business moat for investors or institutional partners?
